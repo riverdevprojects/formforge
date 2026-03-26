@@ -1,0 +1,17 @@
+{
+  "name": "smartforms",
+  "version": "1.0.0",
+  "description": "Intelligent business intake platform with multimedia form collection",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && node --watch server.js",
+    "dev:frontend": "cd frontend && vite",
+    "build": "cd frontend && vite build",
+    "start": "node backend/server.js",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
