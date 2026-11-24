@@ -68,6 +68,8 @@ Visit http://localhost:5173/dashboard
 
 Enter the `DASHBOARD_API_KEY` value from your `.env` file when prompted. The key is stored in `localStorage` so you only need to enter it once per browser.
 
+The CSV has up to 200 `resp_` columns, selected in first-seen order. Column names use letters, digits and underscores, with numbered suffixes for collisions. Additional fields retain their keys in `extra_responses_json`. Media fields show file counts. Formula-like cells are prefixed with an apostrophe before CSV quoting; stored answers are unchanged.
+
 ## Deploying (single server / Docker)
 
 Run one backend instance on a host with persistent local storage. Express serves both the built SPA and `/api`. Put an HTTPS reverse proxy in front of it: browser microphone and camera capture require a secure context outside localhost.
@@ -97,7 +99,7 @@ npm install --omit=dev
 NODE_ENV=production node server.js
 ```
 
-Back up both the database and uploads together (for example, stop the service before copying the data directory). Use an authorized mailbox: notifications contain client answers, but not the uploaded files. Delivery is best effort; the dashboard is the record of submissions. When opening CSVs in a spreadsheet, import response columns as text rather than executing client-supplied formulas.
+Back up both the database and uploads together (for example, stop the service before copying the data directory). Use an authorized mailbox: notifications contain client answers, but not uploaded files. The relay must support implicit TLS or STARTTLS with a trusted certificate. Delivery is best effort: at most two SMTP connections are active and at most 32 notifications are outstanding. A full queue or relay failure does not undo a saved submission. The dashboard is the record of submissions.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -110,7 +112,7 @@ Back up both the database and uploads together (for example, stop the service be
 | `PUBLIC_BASE_URL` | `http://localhost:5173` | Public origin for dashboard links |
 | `SMTP_HOST` | unset | SMTP server; unset disables mail |
 | `SMTP_PORT` | `587` | SMTP port |
-| `SMTP_SECURE` | `false` | `true` for implicit TLS (usually port 465); otherwise STARTTLS when available |
+| `SMTP_SECURE` | `false` | `true` for implicit TLS (usually port 465); otherwise STARTTLS is required, regardless of port |
 | `SMTP_USER` | unset | SMTP login; omit for an unauthenticated relay |
 | `SMTP_PASS` | unset | SMTP password |
 | `NOTIFY_FROM` | `SMTP_USER` or `smartforms@localhost` | Sender address; use a verified address for production |
