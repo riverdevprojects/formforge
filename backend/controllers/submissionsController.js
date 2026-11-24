@@ -1,6 +1,9 @@
 const { v4: uuidv4 } = require('uuid');
+const { Readable, pipeline } = require('stream');
 const Submission = require('../models/Submission');
 const Form = require('../models/Form');
+const { exportRows } = require('../models/submissionExport');
+const { sendNewSubmissionNotification } = require('../utils/mailer');
 
 function listSubmissions(req, res) {
   try {
@@ -11,6 +14,21 @@ function listSubmissions(req, res) {
     console.error('listSubmissions error:', err);
     res.status(500).json({ error: 'Failed to list submissions.' });
   }
+}
+
+function csvCell(value) {
+  const text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportSubmissions(_req, res) {
+  function* lines() {
+    for (const row of exportRows()) yield row.map(csvCell).join(',') + '\r\n';
+  }
+  res.attachment('submissions.csv').type('text/csv').set('Cache-Control', 'no-store');
+  pipeline(Readable.from(lines()), res, (err) => {
+    if (err) console.error('exportSubmissions error:', err.message);
+  });
 }
 
 function getSubmission(req, res) {
@@ -42,48 +60,36 @@ function createSubmission(req, res) {
       return res.status(404).json({ error: 'Form not found.' });
     }
 
-    const submissionId = uuidv4();
-
-    // Collect file references from multer uploads
-    const mediaFiles = [];
-    if (req.files && Array.isArray(req.files)) {
-      req.files.forEach((file) => {
-        mediaFiles.push({
-          fieldname: file.fieldname,
-          filename: file.filename,
-          mimetype: file.mimetype,
-          size: file.size,
-          url: `/api/media/${file.filename}`,
-        });
-      });
-    } else if (req.files && typeof req.files === 'object') {
-      Object.values(req.files).forEach((fileArr) => {
-        fileArr.forEach((file) => {
-          mediaFiles.push({
-            fieldname: file.fieldname,
-            filename: file.filename,
-            mimetype: file.mimetype,
-            size: file.size,
-            url: `/api/media/${file.filename}`,
-          });
-        });
-      });
+    let parsedResponses;
+    try {
+      parsedResponses = typeof responses === 'string' ? JSON.parse(responses) : responses;
+    } catch {
+      return res.status(422).json({ error: 'responses must be valid JSON.' });
+    }
+    if (!parsedResponses || typeof parsedResponses !== 'object' || Array.isArray(parsedResponses)) {
+      return res.status(422).json({ error: 'responses must be an object.' });
     }
 
-    // Parse responses and inject file URLs for media fields
-    let parsedResponses = typeof responses === 'string' ? JSON.parse(responses) : responses;
-    mediaFiles.forEach((mf) => {
-      parsedResponses[mf.fieldname] = mf.url;
-    });
-
-    const submission = Submission.create({
-      id: submissionId,
+    // Collect file references from multer uploads and inject URLs for media fields.
+    const files = Array.isArray(req.files) ? req.files : Object.values(req.files || {}).flat();
+    const mediaFiles = files.map(({ fieldname, filename, mimetype, size }) => ({
+      fieldname, filename, mimetype, size, url: `/api/media/${filename}`,
+    }));
+    const submission = parseSubmissionRow(Submission.create({
+      id: uuidv4(),
       form_id,
-      responses: parsedResponses,
+      responses: { ...parsedResponses, ...Object.fromEntries(mediaFiles.map((mf) => [mf.fieldname, mf.url])) },
       media_files: mediaFiles,
-    });
+    }));
 
-    res.status(201).json(parseSubmissionRow(submission));
+    res.once('finish', () => {
+      setImmediate(() => {
+        sendNewSubmissionNotification(form, submission).catch((err) => {
+          console.error('New submission notification failed:', err.message);
+        });
+      });
+    });
+    res.status(201).json(submission);
   } catch (err) {
     console.error('createSubmission error:', err);
     res.status(500).json({ error: 'Failed to create submission.' });
@@ -120,4 +126,4 @@ function parseSubmissionRow(row) {
   };
 }
 
-module.exports = { listSubmissions, getSubmission, createSubmission, updateSubmission };
+module.exports = { listSubmissions, exportSubmissions, getSubmission, createSubmission, updateSubmission };

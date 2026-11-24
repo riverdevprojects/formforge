@@ -4,12 +4,14 @@ const { requireApiKey } = require('../middleware/auth');
 const { upload, multerErrorHandler } = require('../middleware/upload');
 const {
   listSubmissions,
+  exportSubmissions,
   getSubmission,
   createSubmission,
   updateSubmission,
 } = require('../controllers/submissionsController');
 
 router.get('/', requireApiKey, listSubmissions);
+router.get('/export.csv', requireApiKey, exportSubmissions);
 router.get('/:id', requireApiKey, getSubmission);
 
 // Public submission endpoint — accepts multipart/form-data

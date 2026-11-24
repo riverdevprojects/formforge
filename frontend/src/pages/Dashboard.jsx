@@ -20,6 +20,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [filterForm, setFilterForm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
 
   useEffect(() => {
     if (authed) loadData();
@@ -42,6 +44,32 @@ export default function Dashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch('/api/submissions/export.csv', { headers: { 'x-api-key': getApiKey() } });
+      if (res.status === 401) {
+        handleLogout();
+        setAuthError('Invalid API key. Please try again.');
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'submissions.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setExportError(`CSV download failed: ${err.message}`);
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -155,8 +183,18 @@ export default function Dashboard() {
           >
             Refresh
           </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            title="Download all submissions"
+            className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all no-print"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+          >
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
         </div>
 
+        {exportError && <p role="alert" className="error-text mb-3">{exportError}</p>}
         {loading && (
           <div className="text-center py-12">
             <div className="w-7 h-7 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />

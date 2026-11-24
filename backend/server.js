@@ -126,15 +126,26 @@ function seedDefaultForms() {
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 
-try {
+function start(port = PORT) {
+  if (process.env.NODE_ENV === 'production' && !process.env.DASHBOARD_API_KEY) {
+    throw new Error('DASHBOARD_API_KEY is required in production.');
+  }
   ensureUploadDir();
   initDb();
   seedDefaultForms();
-} catch (err) {
-  console.error('Startup error:', err);
-  process.exit(1);
+  const server = app.listen(port, () => {
+    console.log(`SmartForms API running on http://localhost:${server.address().port}`);
+  });
+  return server;
 }
 
-app.listen(PORT, () => {
-  console.log(`SmartForms API running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  try {
+    start();
+  } catch (err) {
+    console.error('Startup error:', err);
+    process.exit(1);
+  }
+}
+
+module.exports = { app, start };
